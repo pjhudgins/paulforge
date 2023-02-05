@@ -1,0 +1,5 @@
+pommel_mxy,32,-170
+x,60,724,
+bevel_2,y6_z4.4    ,y0_c15_z6.4,
+bevel_1,y14_c2_z4.4,y10_c15_z6.4,
+bevel_0,y30_c4_z0  ,y31_c15_z0,
