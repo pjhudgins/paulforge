@@ -7,11 +7,15 @@ import sword_plot
 from sword_plot import *
 
 
+GRIP = 50
+
 plt.figure(figsize=(14,10))
 
 
-def plot_vertical_mark(x, y, color):
-    plt.plot(np.full(80, x), np.arange(y-40, y+40), ":", color=color, linewidth=2.0)
+def plot_vertical_mark(x, y, color, label=""):
+    plt.plot(np.full(40, x), np.arange(y, y+40), "--", color=color, linewidth=2.0)
+    plt.text(x+5, y+30, label, rotation="vertical")
+
 
 
 def plot_slice(x, sword_map, origin):
@@ -29,8 +33,30 @@ def plot_slice(x, sword_map, origin):
     plt.plot(x - bloat_factor * zs, origin + SECOND_IMAGE_SHIFT + ys, color="black", linewidth=0.3)
 
 
+def center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, distance, origin, color, linewidth):
+    center_of_precussion = moment_of_intertia / (volume * distance)
+    if distance>0:
+        x_a = point_of_balance - center_of_precussion
+        x_b = point_of_balance + distance
+    else:
+        x_a = point_of_balance + distance
+        x_b = point_of_balance - center_of_precussion
+    # plot_vertical_mark(x_a, origin, 'xkcd:blue', "")
+    # plot_vertical_mark(x_b, origin, 'xkcd:blue', "")
+    plt.plot(np.full(20, x_a), np.arange(origin-10, origin + 10), "-", color=color, linewidth=2)
+    plt.plot(np.full(20, x_b), np.arange(origin-10, origin + 10), "-", color=color, linewidth=2)
+    # print([x_a, np.mean([x_a, x_b]), x_b], [origin + 20, origin + 40, origin + 20])
+    ys = sword_plot.three_point_arc([x_a, np.mean([x_a, x_b]), x_b], [origin, origin - 20, origin ], -1)
+    plt.plot(np.arange(x_a, x_b), ys, ":", color=color, linewidth=linewidth)
+
+
+
+
 def analyze(model, sword_map, bevel_plots):
+    global origin
     origin = sword_plot.origin
+
+
     mass_distribution = np.zeros(MAX_X)
 
 
@@ -47,14 +73,16 @@ def analyze(model, sword_map, bevel_plots):
     for bevel in model["bevels"]:
         plt.plot(bevel["xs"] + x_shift, origin + SECOND_IMAGE_CENTER - bevel["ys"], ".", color='blue', markersize=2)
     for x in model["bevels"][0]["xs"]:
-        label = f"x: {x}\n  v"
-        plt.text(x + x_shift - 10, origin + SECOND_IMAGE_CENTER+40, label, rotation="vertical")
+        label = f"{x}"
+        plt.text(x + x_shift - 10, origin + SECOND_IMAGE_CENTER+50, label, rotation="vertical")
 
 
     xs = np.arange(MAX_X)
-    plt.plot(xs, np.full(MAX_X, origin+SECOND_IMAGE_CENTER), ":", color='black', linewidth=1)
-    plt.plot(xs, mass_distribution/2 + origin, ":", color='black', linewidth=1)
+    plt.plot(xs[:CROSSGUARD_X], np.full(CROSSGUARD_X, origin + SECOND_IMAGE_CENTER), ":", color='black', linewidth=1)
     plt.plot(xs, np.full(MAX_X, origin), color='black', linewidth=1)
+
+    plt.plot(xs, np.full(MAX_X, origin + MASS_MODEL_CENTER), "-", color='brown', linewidth=1)
+    plt.plot(xs, mass_distribution / 2 + origin + MASS_MODEL_CENTER, "-", color='brown', linewidth=1)
 
     sig_x_d = 0.0
     mass = 0.0
@@ -64,30 +92,36 @@ def analyze(model, sword_map, bevel_plots):
 
 
     point_of_balance = sum(np.multiply(xs,mass_distribution)) / sum(mass_distribution)
-    print("cog", CROSSGUARD_X - point_of_balance)
-    plot_vertical_mark(point_of_balance, origin+SECOND_IMAGE_CENTER, 'xkcd:brown')
-    # plt.text(500, origin+80, f"pob: \n{round(CROSSGUARD_X-point_of_balance)}")
+    plot_vertical_mark(point_of_balance, origin+MASS_MODEL_CENTER, 'xkcd:brown', "POB")
 
     moi_elements = np.multiply(np.multiply(mass_distribution, xs-point_of_balance), xs-point_of_balance)
     moment_of_intertia = sum(moi_elements)
     radius_of_gyration = np.sqrt(moment_of_intertia / sum(mass_distribution))
-    print("moi/rog", moment_of_intertia, radius_of_gyration)
-    # plt.text(700, origin + 80, f"rog: {round(radius_of_gyration)}")
 
     bar_start = point_of_balance - (radius_of_gyration * np.sqrt(3)) # Based on formula for a radius of gyration of a uniform bar
     bar_end  = point_of_balance + (radius_of_gyration * np.sqrt(3))
     bar = range(round(bar_start), round(bar_end))
-    plot_vertical_mark(point_of_balance - radius_of_gyration, origin+SECOND_IMAGE_CENTER, 'xkcd:pink')
-    plot_vertical_mark(point_of_balance + radius_of_gyration, origin + SECOND_IMAGE_CENTER, 'xkcd:pink')
-    plt.plot(bar, [origin + SECOND_IMAGE_CENTER - 40] * len(bar), color='brown', linewidth=4)
+    plot_vertical_mark(point_of_balance - radius_of_gyration, origin + MASS_MODEL_CENTER, 'xkcd:pink', "ROG")
+    plot_vertical_mark(point_of_balance + radius_of_gyration, origin + MASS_MODEL_CENTER, 'xkcd:pink', "ROG")
+    plt.plot(bar, [origin + MASS_MODEL_CENTER-30] * len(bar), color='brown', linewidth=4)
 
-    volume = sum(mass_distribution) / 1000
-    # plt.text(900, origin + 80, f"vol: {round(volume)}")
+    volume = sum(mass_distribution)
 
-    stats = f"pob: {round(CROSSGUARD_X-point_of_balance)}"
-    stats += f"\nrog: {round(radius_of_gyration)}"
-    stats += f"\nvol: {round(volume)}"
-    plt.text(10, origin+10, stats)
+    hilt_from_pob = GRIP + CROSSGUARD_X - point_of_balance
+    crossguard_from_pob = CROSSGUARD_X - point_of_balance
+    #center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, hilt_from_pob, origin+MASS_MODEL_CENTER)
+    # center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, -600, origin + MASS_MODEL_CENTER)
+    # center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, -400, origin + MASS_MODEL_CENTER)
+    # center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, -200, origin + MASS_MODEL_CENTER)
+    center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, crossguard_from_pob, origin + MASS_MODEL_CENTER, "xkcd:orange",1)
+    center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, crossguard_from_pob+40, origin + MASS_MODEL_CENTER, "xkcd:red",1)
+    center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, crossguard_from_pob+100, origin + MASS_MODEL_CENTER, "xkcd:red brown",1)
+    center_of_precussion_plot(point_of_balance, moment_of_intertia, volume, crossguard_from_pob+180, origin + MASS_MODEL_CENTER, "xkcd:black",1)
+
+    stats = f"Point of Bal: {round(CROSSGUARD_X-point_of_balance)}"
+    stats += f"\nRad of Gyr: {round(radius_of_gyration)}"
+    stats += f"\nTotal Volume: {round(volume / 1000)}"
+    plt.text(CROSSGUARD_X+30, origin+10, stats)
 
     cross_sectional_com = np.zeros(CROSSGUARD_X)
     y_strength = np.zeros(CROSSGUARD_X)
@@ -140,21 +174,21 @@ def read_and_plot(fn, map):
 
     sword_map, bevel_plots = map_plot(model, map)
     analyze(model, sword_map, bevel_plots)
-    sword_plot.origin += 350
+    sword_plot.origin += 500
 
 import warnings
 warnings.filterwarnings("ignore") # TODO narrow this down
 
 max_z = 4  # This has an effect on color gradients.
 # tmap = np.full([1400, 1000], float(max_z)) #Thickness map
-tmap = np.zeros([1400,1000])
+tmap = np.zeros([MAX_X,MAX_Y])
 
-read_and_plot("c15_prince2.csv", tmap)
+read_and_plot("definitions/c15_prince2.csv", tmap)
 # read_and_plot("c15_katana.csv", tmap)
 # read_and_plot("c15_f3c.csv", tmap)
 # read_and_plot("c15_saber_3.csv", tmap)
-read_and_plot("c15_saber_5c.csv", tmap)
-read_and_plot("c15_saber_5d.csv", tmap)
+read_and_plot("definitions/c15_saber_5c.csv", tmap)
+# read_and_plot("c15_saber_5d.csv", tmap)
 
 cmap='terrain'
 cmap = 'YlGnBu_r'
